@@ -31,8 +31,24 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.get_json()
+
+    if isinstance(data, dict):
+        data = [data]
+
     df = pd.DataFrame(data)
 
+    # Rename / map fields
+    df['amount'] = df['total_due']
+    df['usage_units'] = 0
+    df['usage_rate'] = 0
+    df['paid_date'] = df['posting_date']
+
+    # Convert numeric fields
+    df['debit'] = df['debit'].astype(float)
+    df['credit'] = df['credit'].astype(float)
+    df['amount'] = df['amount'].astype(float)
+
+    # Convert dates
     for col in ['due_date','paid_date','bill_from_date','bill_thru_date']:
         df[col] = pd.to_datetime(df[col])
 
