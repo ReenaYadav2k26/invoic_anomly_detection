@@ -14,7 +14,7 @@ def calculate_anomaly(df):
     df['high_delay'] = df['payment_delay'] > 30
     df['amount_mismatch'] = abs(df['amount_diff']) > 20
 
-    cols = ['paid_before_due','credit_gt_debit','high_delay','amount_mismatch']
+    cols = ['paid_before_due', 'credit_gt_debit', 'high_delay', 'amount_mismatch']
     df['anomaly_score'] = df[cols].sum(axis=1)
     df['is_anomaly'] = df['anomaly_score'] >= 2
 
@@ -24,34 +24,58 @@ def calculate_anomaly(df):
 
     return df
 
+
 @app.route("/")
 def home():
     return "Anomaly Detection API is running 🚀"
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.get_json()
 
+    # 🔥 STEP 1: Extract actual payload (Unify sends inside body)
+    if isinstance(data, dict) and "body" in data:
+        data = data["body"]
+
+    # 🔥 STEP 2: Handle res wrapper OR single object
     if isinstance(data, dict):
-        data = [data]
+        if "res" in data:
+            data = data["res"]
+        else:
+            data = [data]
+
+    # 🔥 STEP 3: Final validation
+    if not isinstance(data, list):
+        return jsonify({"error": "Invalid input format"}), 400
+
+    # 🔥 DEBUG (optional)
+    print("FINAL DATA:", data)
 
     df = pd.DataFrame(data)
 
-    # Rename / map fields
-    df['amount'] = df['total_due']
-    df['usage_units'] = 0
-    df['usage_rate'] = 0
-    df['paid_date'] = df['posting_date']
+    try:
+        # Rename / map fields
+        df['amount'] = df['total_due']
+        df['usage_units'] = 0
+        df['usage_rate'] = 0
+        df['paid_date'] = df['posting_date']
 
-    # Convert numeric fields
-    df['debit'] = df['debit'].astype(float)
-    df['credit'] = df['credit'].astype(float)
-    df['amount'] = df['amount'].astype(float)
+        # Convert numeric fields
+        df['debit'] = df['debit'].astype(float)
+        df['credit'] = df['credit'].astype(float)
+        df['amount'] = df['amount'].astype(float)
 
-    # Convert dates
-    for col in ['due_date','paid_date','bill_from_date','bill_thru_date']:
-        df[col] = pd.to_datetime(df[col])
+        # Convert dates
+        for col in ['due_date', 'paid_date', 'bill_from_date', 'bill_thru_date']:
+            df[col] = pd.to_datetime(df[col])
 
-    df = calculate_anomaly(df)
+        df = calculate_anomaly(df)
 
-    return jsonify(df[['invoice_no','anomaly_score','is_anomaly','trigger_reasons']].to_dict(orient="records"))
+        return jsonify(
+            df[['invoice_no', 'anomaly_score', 'is_anomaly', 'trigger_reasons']]
+            .to_dict(orient="records")
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
