@@ -32,27 +32,32 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json()
+    data = request.get_json(force=True)
 
-    # 🔥 STEP 1: Extract actual payload (Unify sends inside body)
-    if isinstance(data, dict) and "body" in data:
-        data = data["body"]
-
-    # 🔥 STEP 2: Handle res wrapper OR single object
+    # STEP 1: Handle Unify wrapper
     if isinstance(data, dict):
-        if "res" in data:
-            data = data["res"]
-        else:
-            data = [data]
+        if "body" in data:
+            data = data["body"]
 
-    # 🔥 STEP 3: Final validation
-    if not isinstance(data, list):
+    # STEP 2: Convert to list
+    if isinstance(data, dict):
+        data = [data]
+
+    # STEP 3: Extract "properties" (🔥 MAIN FIX)
+    cleaned_data = []
+    for item in data:
+        if isinstance(item, dict) and "properties" in item:
+            cleaned_data.append(item["properties"])
+        else:
+            cleaned_data.append(item)
+
+    # STEP 4: Validate
+    if not isinstance(cleaned_data, list):
         return jsonify({"error": "Invalid input format"}), 400
 
-    # 🔥 DEBUG (optional)
-    print("FINAL DATA:", data)
+    print("CLEANED DATA:", cleaned_data)
 
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(cleaned_data)
 
     try:
         # Rename / map fields
@@ -78,4 +83,5 @@ def predict():
         )
 
     except Exception as e:
+        print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
